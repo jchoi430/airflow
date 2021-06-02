@@ -1,0 +1,62 @@
+version: '3.7'
+
+# ====================================== Airflow Volumns =======================================
+x-environment: &airflow_env
+  - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+  - AIRFLOW__CORE__FERNET_KEY=YlCImzjge_TeZc7jPJ7Jz2pgOtb4yTssA1pVyqIADWg=
+  - AIRFLOW__CORE__LOAD_EXAMPLES=False
+  - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+  - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+  - AIRFLOW__WEBSERVER__SECRET_KEY=9a8e40be381b9ee4a4f48f4c91c6900b
+
+x-volumes: &airflow_volumes
+  - ./dags:/opt/airflow/dags
+  - ./configs/airflow.cfg:/opt/airflow/airflow.cfg
+  - ./scripts:/opt/airflow/scripts
+  - ./logs:/opt/airflow/logs
+  - ./temp:/opt/airflow/temp
+  # Uncomment to include test_dags and custom plugins
+  #- ./test_dags:/opt/airflow/test_dags
+  #- ./plugins:/opt/airflow/plugins
+# ====================================== /AIRFLOW ENVIRONMENT VARIABLES ======================================
+services:
+  postgres:
+    build: './dockers/postgres'
+    container_name: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "3"
+          max-size: "10m"
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-q", "-d", "airflow", "-U", "airflow" ]
+      interval: 5s
+      retries: 5
+  
+  webserver:
+    build: './dockers/airflow'
+    restart: always
+    depends_on:
+      - postgres
+    container_name: airflow
+    ports:
+      - "8080:8080"
+    volumes: *airflow_volumes
+    environment: *airflow_env
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/"]
+      timeout: 30s
+      interval: 10s
+      retries: 3
+
+volumes:
+  postgres-db-volume:
